@@ -1,6 +1,6 @@
 /*
   StealthMan
-  Copyright (C) 2014,2016 Bernhard Schelling
+  Copyright (C) 2014-2019 Bernhard Schelling
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -76,7 +76,7 @@ static ZL_Sound sndPak;
 static ZL_Font fnt, fntTitle;
 static ZL_Surface srfSprite, srfLightMask, srfLudumDare;
 
-static int timefreeze;
+static int timefreeze, lowfpscount;
 static scalar elapsesum;
 static ticks_t timeTick, timeLastPellet, timeLastPowerpelletStart, timeLastPowerpelletEnd, timeLastEnemy, timeEnemyRespawn, zlticksDead;
 
@@ -88,10 +88,18 @@ static ticks_t timeTick, timeLastPellet, timeLastPowerpelletStart, timeLastPower
 #define PELLETRESTPAWNTIME 30000
 #define POWERPELLETRESTPAWNTIME 60000
 
-ZL_Rectf recScreen(-s(.5), -s(.5), s(lw)-s(.5), s(lh)-s(.5));
 static const ZL_Color colPPGhost = ZLRGBA(0,0,.8,.8);
 static const ZL_Color colPlayerLight = ZLRGB(.4,.35,.1);
 static bool PPActive, PPActiveBlink, ArcadeMode = false;
+static ZL_Rectf recScreen(-s(.5), -s(.5), s(lw)-s(.5), s(lh)-s(.5));
+static ZL_Rectf recButtonStealth(640-250, 270, 640+250, 270+80);
+static ZL_Rectf recButtonArcade(640-250, 150, 640+250, 150+80);
+
+#ifdef __SMARTPHONE__
+bool useTouchUI = true;
+#else
+bool useTouchUI = false;
+#endif
 
 static struct sPlayer
 {
@@ -128,6 +136,11 @@ static struct sPlayer
 		bool oldhor = (dir.x!=0), oldvert = (dir.y!=0);
 		dir.x = (ZL_Display::KeyDown[ZLK_A] || ZL_Display::KeyDown[ZLK_LEFT] ? s(-1) : s(0)) + (ZL_Display::KeyDown[ZLK_D] || ZL_Display::KeyDown[ZLK_RIGHT] ? s(1) : s(0));
 		dir.y = (ZL_Display::KeyDown[ZLK_S] || ZL_Display::KeyDown[ZLK_DOWN] ? s(-1) : s(0)) + (ZL_Display::KeyDown[ZLK_W] || ZL_Display::KeyDown[ZLK_UP   ] ? s(1) : s(0));
+
+		ZL_Vector spPosPlayerOnScreen = ZL_Rectf::Map(pos, recScreen, ZL_Rectf(0, 0, ZLWIDTH, ZLHEIGHT));
+		ZL_Rectf spRecAction = ZL_Rectf(spPosPlayerOnScreen, ZLHEIGHT*.01f);
+		if (!dir) dir = (ZL_Display::MouseDown[ZL_BUTTON_LEFT] && !spRecAction.Contains(ZL_Display::PointerPos()) ? ((ZL_Display::PointerPos() - spPosPlayerOnScreen) / (ZLHEIGHT*.2f)).SetMaxLength(1) : ZL_Vector::Zero);
+
 		if (pos.x <= s(-.5) || pos.x >= s(lw-.5)) dir.y = 0;
 		if (pos.y <= s(-.5) || pos.y >= s(lh-.5)) dir.x = 0;
 		if      (!oldhor && dir.x!=0) preferVerticalMovement = false;
@@ -343,7 +356,6 @@ struct sEnemy
 	}
 	void DrawChar()
 	{
-
 		srfSprite.Draw(pos, s(0.055), s(0.055), ZLBLACK);
 		srfSprite.Draw(pos, (PPActiveBlink ? colPPGhost : col));
 	}
@@ -399,6 +411,7 @@ struct sPakuman : public ZL_Application
 		sndPak = ZL_SynthImcTrack::LoadAsSample(&imcDataIMCPAK);
 
 		ZL_Display::sigKeyDown.connect(this, &sPakuman::OnKeyDown);
+		ZL_Display::sigPointerDown.connect(this, &sPakuman::OnPointerDown);
 		srfSprite = ZL_Surface("Data/sprite.png").SetTilesetClipping(4, 4).SetOrigin(ZL_Origin::Center).SetScale(s(.05));
 		srfLightMask = ZL_Surface("Data/light_mask.png");
 		srfLudumDare = ZL_Surface("Data/ludumdare31.png").SetOrigin(ZL_Origin::BottomRight);
@@ -425,6 +438,7 @@ struct sPakuman : public ZL_Application
 
 	void OnKeyDown(ZL_KeyboardEvent& e)
 	{
+		useTouchUI = false;
 		if (e.key == ZLK_ESCAPE) { if (istitle) { Quit(); } else { GoToTitle(); } }
 		if (istitle && (e.key == ZLK_DOWN || e.key == ZLK_UP || e.key == ZLK_W || e.key == ZLK_S)) { ArcadeMode ^= 1; sndPak.Play(); }
 		if (istitle && (e.key == ZLK_RETURN || e.key == ZLK_SPACE)) { Start(); imcEat.Play(); }
@@ -434,13 +448,19 @@ struct sPakuman : public ZL_Application
 		#endif
 	}
 
+	void OnPointerDown(ZL_PointerPressEvent& e)
+	{
+		useTouchUI = true;
+		if (istitle && recButtonArcade.Contains(e))  { if ( ArcadeMode) { Start(); imcEat.Play(); } else { ArcadeMode = true;  sndPak.Play(); } }
+		if (istitle && recButtonStealth.Contains(e)) { if (!ArcadeMode) { Start(); imcEat.Play(); } else { ArcadeMode = false; sndPak.Play(); } }
+		if (zlticksDead && ZLSINCE(zlticksDead) > 500) { GoToTitle(); sndPak.Play(); }
+	}
+
 	void DrawTitle()
 	{
 		ZL_Color col = ZLHSV((ZLTICKS%6000)/s(6000),1,1);
 		ZL_Color colsel = col*s(.3);
 		DrawTextBordered(ZLHALFW, ZLHEIGHT*.75f, "StealthMan", 3.0f, 4, ZLBLACK, col);
-		ZL_Rectf recButtonStealth(640-250, 270, 640+250, 270+80);
-		ZL_Rectf recButtonArcade(640-250, 150, 640+250, 150+80);
 		ZL_Display::FillRect(recButtonStealth.left-5,recButtonStealth.low-5,recButtonStealth.right+5,recButtonStealth.high+5, ZLWHITE);
 		ZL_Display::FillRect(recButtonStealth.left-4,recButtonStealth.low-4,recButtonStealth.right+4,recButtonStealth.high+4, col);
 		ZL_Display::FillRect(recButtonStealth, (ArcadeMode ? ZLBLACK : colsel));
@@ -450,10 +470,18 @@ struct sPakuman : public ZL_Application
 		ZL_Display::FillRect(recButtonArcade, (ArcadeMode ? colsel : ZLBLACK));
 		DrawTextBordered(recButtonArcade.MidX(), recButtonArcade.low+35, "Arcade Mode", 1.0f, 2, ZLBLACK, col);
 
-		fnt.Draw(ZLHALFW, 90, "ARROW KEYS / WASD TO MOVE", ZL_Origin::Center);
-		fnt.Draw(ZLHALFW, 70, "PRESS ENTER TO START", ZL_Origin::Center);
+		if (useTouchUI)
+		{
+			fnt.Draw(ZLHALFW, 90, "TAP AND HOLD TO MOVE", ZL_Origin::Center);
+			fnt.Draw(ZLHALFW, 70, "SELECT MODE TO START", ZL_Origin::Center);
+		}
+		else
+		{
+			fnt.Draw(ZLHALFW, 90, "ARROW KEYS / WASD TO MOVE", ZL_Origin::Center);
+			fnt.Draw(ZLHALFW, 70, "PRESS ENTER TO START", ZL_Origin::Center);
+		}
 
-		DrawTextBordered(25, 13, "(c) 2014 Bernhard Schelling - Nukular Design", s(.65), 1, ZLLUMA(.0,.95), ZLLUMA(1,.6), ZL_Origin::TopLeft);
+		DrawTextBordered(25, 13, "(c) 2014-2019 Bernhard Schelling", s(.65), 1, ZLLUMA(.0,.95), ZLLUMA(1,.6), ZL_Origin::TopLeft);
 		srfLudumDare.Draw(ZLFROMW(10), 10);
 	}
 
@@ -594,6 +622,12 @@ struct sPakuman : public ZL_Application
 
 	virtual void AfterFrame()
 	{
+		if (lowfpscount < 10)
+		{
+			if (FPS < 10 && FrameCount > 3) lowfpscount++;
+			else if (lowfpscount) lowfpscount--;
+		}
+
 		if (zlticksDead) { }
 		else if (timefreeze && --timefreeze) { }
 		else
@@ -614,16 +648,19 @@ struct sPakuman : public ZL_Application
 		GenerateLightMap(srfLightMapSwaps, 512, Player.pos);
 
 		sEnemy *pEnemy, *pEnemyBegin = &*Enemies.begin(), *pEnemyEnd = pEnemyBegin+Enemies.size();
-		for (pEnemy = pEnemyBegin; pEnemy != pEnemyEnd; ++pEnemy)
-			if (PPActive || pEnemy->visible || multilight)
-				pEnemy->DrawLightGenerate();
-		if (!PPActive)
+		if (lowfpscount < 10)
 		{
-			sEnemy::DrawLightStart();
 			for (pEnemy = pEnemyBegin; pEnemy != pEnemyEnd; ++pEnemy)
 				if (PPActive || pEnemy->visible || multilight)
-					pEnemy->DrawLightDo();
-			sEnemy::DrawLightEnd();
+					pEnemy->DrawLightGenerate();
+			if (!PPActive)
+			{
+				sEnemy::DrawLightStart();
+				for (pEnemy = pEnemyBegin; pEnemy != pEnemyEnd; ++pEnemy)
+					if (PPActive || pEnemy->visible || multilight)
+						pEnemy->DrawLightDo();
+				sEnemy::DrawLightEnd();
+			}
 		}
 
 		if (!istitle)
