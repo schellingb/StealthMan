@@ -137,9 +137,9 @@ static struct sPlayer
 		dir.x = (ZL_Display::KeyDown[ZLK_A] || ZL_Display::KeyDown[ZLK_LEFT] ? s(-1) : s(0)) + (ZL_Display::KeyDown[ZLK_D] || ZL_Display::KeyDown[ZLK_RIGHT] ? s(1) : s(0));
 		dir.y = (ZL_Display::KeyDown[ZLK_S] || ZL_Display::KeyDown[ZLK_DOWN] ? s(-1) : s(0)) + (ZL_Display::KeyDown[ZLK_W] || ZL_Display::KeyDown[ZLK_UP   ] ? s(1) : s(0));
 
-		ZL_Vector spPosPlayerOnScreen = ZL_Rectf::Map(pos, recScreen, ZL_Rectf(0, 0, ZLWIDTH, ZLHEIGHT));
-		ZL_Rectf spRecAction = ZL_Rectf(spPosPlayerOnScreen, ZLHEIGHT*.01f);
-		if (!dir) dir = (ZL_Display::MouseDown[ZL_BUTTON_LEFT] && !spRecAction.Contains(ZL_Display::PointerPos()) ? ((ZL_Display::PointerPos() - spPosPlayerOnScreen) / (ZLHEIGHT*.2f)).SetMaxLength(1) : ZL_Vector::Zero);
+		ZL_Vector touchPosPlayerOnScreen = ZL_Rectf::Map(pos, recScreen, ZL_Rectf(0, 0, ZLWIDTH, ZLHEIGHT));
+		ZL_Rectf touchRecPlayer = ZL_Rectf(touchPosPlayerOnScreen, ZLHEIGHT*.01f);
+		if (!dir) dir = (ZL_Display::MouseDown[ZL_BUTTON_LEFT] && !touchRecPlayer.Contains(ZL_Display::PointerPos()) ? ((ZL_Display::PointerPos() - touchPosPlayerOnScreen) / (ZLHEIGHT*.2f)).SetMaxLength(1) : ZL_Vector::Zero);
 
 		if (pos.x <= s(-.5) || pos.x >= s(lw-.5)) dir.y = 0;
 		if (pos.y <= s(-.5) || pos.y >= s(lh-.5)) dir.x = 0;
@@ -438,7 +438,7 @@ struct sPakuman : public ZL_Application
 
 	void OnKeyDown(ZL_KeyboardEvent& e)
 	{
-		useTouchUI = false;
+		if (e.key != ZLK_ESCAPE) useTouchUI = false;
 		if (e.key == ZLK_ESCAPE) { if (istitle) { Quit(); } else { GoToTitle(); } }
 		if (istitle && (e.key == ZLK_DOWN || e.key == ZLK_UP || e.key == ZLK_W || e.key == ZLK_S)) { ArcadeMode ^= 1; sndPak.Play(); }
 		if (istitle && (e.key == ZLK_RETURN || e.key == ZLK_SPACE)) { Start(); imcEat.Play(); }
