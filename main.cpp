@@ -407,7 +407,7 @@ struct sPakuman : public ZL_Application
 		ZL_Display::SetAA(true);
 		ZL_Audio::Init();
 		fnt = ZL_Font("Data/typomoderno.ttf.zip", 20);
-		fntTitle = ZL_Font("Data/graycat.ttf.zip", 60).SetCharSpacing(5);
+		fntTitle = ZL_Font("Data/graycat.ttf.zip", 60);
 		sndPak = ZL_SynthImcTrack::LoadAsSample(&imcDataIMCPAK);
 
 		ZL_Display::sigKeyDown.connect(this, &sPakuman::OnKeyDown);
